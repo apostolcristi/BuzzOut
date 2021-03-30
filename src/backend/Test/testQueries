@@ -1,0 +1,273 @@
+mutation CreateConversation {
+  createConversation(
+    input: { 
+      pk: "c100"
+      createdAt: "2019-11-01T00:00:00.000Z" 
+    }
+  ) {
+    pk
+    createdAt
+  }
+}
+
+mutation CreateMessage {
+  createMessage(
+    input: {
+      pk: "m6"
+      createdAt: "2019-11-11T00:00:00.000Z"
+      conversationId: "c100"
+      content: "yuuuuuyy"
+      sender: "u2"
+    }
+  ) {
+    authorId
+    pk
+    createdAt
+    content_search
+    isSent
+  }
+}
+
+mutation CreatePlateNumber {
+  createPlateNumber(
+    input: {
+      pk: "u1"
+      plateNumber: "TM-90-BLA"
+      lastModified: "2019-11-01T00:00:00.000Z"
+      expoToken: "expo_token_u1"
+      phoneNumber: "0745321231"
+    }
+  ) {
+    pk
+    createdAt
+    expoToken
+    phoneNumber
+    content_search
+  }
+}
+
+mutation CreateUserConversations {
+  createUserConversations(
+    input: {
+      conversationId: "c100"
+      userId: "u2"
+      createdAt: "2019-11-01T00:00:00.000Z"
+    }
+  )  { 
+      pk
+      s_key
+      createdAt
+      conversation{
+        pk
+        createdAt
+        messages(first:1){
+          messages{
+            content_search
+            authorId
+            createdAt
+          }
+        }
+      }
+      user{
+        pk
+        content_search
+      }
+      associated{
+        user{
+          pk
+          content_search
+        }
+      }
+  }
+}
+
+mutation DeletePlateNumber {
+  deletePlateNumber(input:{
+    pk: "u1"
+  }){
+    pk
+  }
+}
+
+mutation UpdatePlateNumber{
+  updatePlateNumber(input:{
+    content_search: "TM-91-TRE"
+    pk: "u1"
+  }){
+    pk
+    createdAt
+    content_search
+    phoneNumber
+    expoToken
+  }
+}
+
+query meQuery{
+  me(pk:"u1"){
+    pk
+    expoToken
+    content_search
+    createdAt
+    phoneNumber
+  }
+}
+
+query allPlateNumbers{
+  allPlateNumbers{
+    items{
+    pk
+    createdAt
+    content_search
+    phoneNumber
+    expoToken
+  }
+    nextToken
+  }
+}
+
+query allMessages{
+  allMessages(conversationId: "c4"){
+    messages {
+      pk
+      s_key
+      content_search
+      isSent
+      authorId
+      createdAt
+    }
+    nextToken
+  }
+}
+
+
+query allConversationOfMe{
+  allConversationsOfMe(userId:"u2"){
+    userConversations {
+      pk
+      s_key
+      createdAt
+    }
+      nextToken
+  }
+}
+
+subscription onCreatePlateNr{
+  onCreatePlateNumber{
+    pk
+  	createdAt
+    content_search
+    phoneNumber
+    expoToken
+  }
+}
+
+subscription onDeletePlateNr{
+  onDeletePlateNumber{
+    pk
+  }
+}
+
+subscription onUpdatePlateNr{
+  onUpdatePlateNumber{
+    pk
+    createdAt
+    content_search
+    phoneNumber
+    expoToken
+  }
+}
+
+subscription onCreateNewUserConversation{
+  subscribeToNewUserConversation(s_key: "member_u1"){
+     pk
+      s_key
+      createdAt
+      conversation{
+        pk
+        createdAt
+        messages(first:1){
+          messages{
+            content_search
+            authorId
+            createdAt
+          }
+        }
+      }
+      user{
+        pk
+        content_search
+      }
+      associated{
+        user{
+          pk
+          content_search
+        }
+      }
+  }
+}
+
+subscription onDeleteUserConversation{
+  subscribeToDeleteUserConversation(s_key: "member_u1"){
+    pk
+    s_key
+  }
+}
+
+subscription onCreateNewMesage{
+  subscribeToNewMessage(pk: "1c30a178-fd58-4548-8a89-5b788ca7f206"){
+   pk
+      authorId
+      s_key
+      _id: s_key
+      createdAt
+      content_search
+      isSent
+  }
+}
+
+
+
+query allConversationOfMeConv{
+  allConversationsOfMe(userId:"u1"){
+    userConversations {
+      pk
+      s_key
+      createdAt
+      conversation{
+        pk
+        createdAt
+        messages(first:1){
+          messages{
+            content_search
+            authorId
+            createdAt
+          }
+        }
+      }
+      user{
+        pk
+        content_search
+      }
+      associated{
+        user{
+          pk
+          content_search
+        }
+      }
+    }
+      nextToken
+  }
+}
+
+mutation deleteConversation{
+  deleteConversation(input: { pk: "c100"}){
+    pk
+  }
+}
+
+mutation deleteuserConversations{
+  deleteUserConversations(input: {conversationId: "c100", userId: "u1"}){
+    pk
+  }
+}
+

@@ -1,0 +1,17 @@
+{
+  "version" : "2017-02-28",
+  "operation" : "Query",
+  #set ($val = "member_${ctx.args.userId}")
+  "query" : {
+      "expression": "s_key = :s_key",
+      "expressionValues" : {
+          ":s_key" : {
+              "S" : "${val}"
+          },
+      },
+  },
+  "index": "gsi-index",
+  "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+  "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+  "scanIndexForward": true,
+}

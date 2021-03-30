@@ -1,0 +1,13 @@
+{
+  "version" : "2017-02-28",
+  "operation" : "PutItem",
+  "key": {
+      "pk":  $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+      "s_key": { "S": "conversation_config" },
+  },
+  "attributeValues" : {
+    "createdAt": {"S": "${ctx.args.input.createdAt}"},
+    "pk": {"S": "${ctx.args.input.pk}"},
+    "s_key": {"S": "conversation_config"},
+  },
+}

@@ -1,0 +1,51 @@
+{
+  "env": {
+    "node": true,
+    "browser": true,
+    "es6": true,
+    "jest": true
+  },
+
+  "parser": "babel-eslint",
+
+  "extends": [
+    "eslint:recommended",
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "airbnb",
+    "prettier",
+    "prettier/react"
+  ],
+  "rules": {
+    "react/jsx-filename-extension": [
+      1,
+      {
+        "extensions": [
+          ".js",
+          ".jsx"
+        ]
+      }
+    ],
+    "prettier/prettier": [
+      "error",
+      {
+        "trailingComma": "es5",
+        "singleQuote": true,
+        "printWidth": 100
+      }
+    ],
+    "import/no-unresolved": [2, {
+      "commonjs": true,
+      "amd": true
+    }],
+    "import/named": 2,
+    "import/namespace": 2,
+    "import/default": 2,
+    "import/export": 2,
+    "no-console": "off"
+  },
+  "plugins": [
+    "prettier",
+    "import"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "version" : "2017-02-28",
+  "operation" : "PutItem",
+  #set ($SK = "message_${ctx.args.input.createdAt}_${ctx.args.input.pk}")
+  "key" : {
+      "pk" : $util.dynamodb.toDynamoDBJson($ctx.args.input.conversationId),
+      "s_key": {"S": "${SK}"},
+  },
+  "attributeValues" : {
+    "authorId": {"S": "${ctx.args.input.sender}"},
+    "createdAt": { "S": "${ctx.args.input.createdAt}" },
+    "pk": {"S": "${ctx.args.input.conversationId}"},
+    "isSent": {"BOOL": true },
+    "s_key": {"S": "${SK}"},
+    "content_search": {"S": "${ctx.args.input.content}"},
+  },
+}

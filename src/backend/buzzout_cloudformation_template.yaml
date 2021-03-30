@@ -1,0 +1,801 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "This is the cloud formation template for buzz out application"
+Resources:
+  DynamoDBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join
+        - ""
+        - - !Ref "AWS::StackName"
+          - "-appsync-dynamodb-role"
+      ManagedPolicyArns:
+        - Ref: AppSyncDynamoDBPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - appsync.amazonaws.com
+    DependsOn:
+      - AppSyncDynamoDBPolicy
+
+  AppSyncDynamoDBPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Managed policy to allow AWS AppSync to access the tables created by this template.
+      Path: /appsync/
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: dynamodb:*
+            Resource:
+              - !GetAtt BuzzOutTable.Arn
+              - !Sub "${BuzzOutTable.Arn}/index/gsi-index"
+
+  BuzzOutTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: "pk"
+          AttributeType: "S"
+        - AttributeName: "s_key"
+          AttributeType: "S"
+        - AttributeName: "content_search"
+          AttributeType: "S"
+      BillingMode: "PROVISIONED"
+      KeySchema:
+        - AttributeName: "pk"
+          KeyType: "HASH"
+        - AttributeName: "s_key"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      GlobalSecondaryIndexes:
+        - IndexName: "gsi-index"
+          KeySchema:
+            - AttributeName: "s_key"
+              KeyType: "HASH"
+            - AttributeName: "content_search"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: "1"
+            WriteCapacityUnits: "1"
+      TableName: !Join
+        - ""
+        - - !Ref "AWS::StackName"
+          - "-buzzout-table"
+
+  GraphQLApi:
+    Type: "AWS::AppSync::GraphQLApi"
+    Properties:
+      Name: AWSAppSync_DynamoDB_BuzzOut
+      AuthenticationType: API_KEY
+
+  GraphQLApiKey:
+    Type: AWS::AppSync::ApiKey
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Description: "API KEY for BUZZ OUT"
+      Expires: 1603411200
+
+  BuzzOutDBTableDataSource:
+    Type: "AWS::AppSync::DataSource"
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Name: BuzzOutTable
+      Description: The BUZZOUT table in eu-central-1
+      Type: AMAZON_DYNAMODB
+      ServiceRoleArn: !GetAtt DynamoDBRole.Arn
+      DynamoDBConfig:
+        AwsRegion: !Sub ${AWS::Region}
+        TableName: !Ref BuzzOutTable
+
+  Schema:
+    Type: "AWS::AppSync::GraphQLSchema"
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      Definition: |
+        type Conversation {
+          createdAt: AWSDateTime
+          pk: ID!
+          messages(after: String, first: Int): MessageConnection
+          content_search: String
+        }
+
+        input CreateConversationInput {
+          createdAt: AWSDateTime
+          pk: ID!
+          name: String
+        }
+
+        input CreateMessageInput {
+          content: String!
+          conversationId: ID!
+          createdAt: AWSDateTime!
+          pk: ID!
+          sender: String
+        }
+
+        input CreatePlateNumberInput {
+          expoToken: String
+          pk: ID!
+          lastModified: AWSDateTime
+          phoneNumber: String
+          plateNumber: String!
+        }
+
+        input CreateUserConversationsInput {
+          conversationId: ID!
+          userId: ID!
+          createdAt: AWSDateTime
+        }
+
+        input DeleteConversationInput {
+          pk: ID!
+        }
+
+        input DeletePlateNumberInput {
+          pk: ID!
+        }
+
+        input DeleteUserConversationsInput {
+          conversationId: ID!
+          userId: ID!
+        }
+
+        type Message {
+          author: PlateNumber
+          content_search: String!
+          pk: ID!
+          createdAt: AWSDateTime
+          s_key: ID!
+          isSent: Boolean
+          authorId: String
+        }
+
+        type MessageConnection {
+          messages: [Message]
+          nextToken: String
+        }
+
+        type Mutation {
+          createConversation(input: CreateConversationInput!): Conversation
+          createMessage(input: CreateMessageInput): Message
+          createPlateNumber(input: CreatePlateNumberInput!): PlateNumber
+          createUserConversations(input: CreateUserConversationsInput!): UserConversations
+          deletePlateNumber(input: DeletePlateNumberInput!): PlateNumber
+          updatePlateNumber(input: UpdatePlateNumberInput!): PlateNumber
+          deleteConversation(input: DeleteConversationInput!): Conversation
+          deleteUserConversations(input: DeleteUserConversationsInput!): UserConversations
+        }
+
+        type PlateNumber {
+          conversations(after: String, first: Int): UserConversationsConnection
+          messages(after: String, first: Int): MessageConnection
+          pk: ID!
+          content_search: String!
+          phoneNumber: String
+          createdAt: AWSDateTime
+          expoToken: String
+        }
+
+        type PlateNumberConnection {
+          items: [PlateNumber]
+          nextToken: String
+        }
+
+        type Query {
+          allConversationsOfMe(after: String, userId: ID!, first: Int): UserConversationsConnection
+          allMessages(after: String, conversationId: ID!, first: Int): MessageConnection
+          allPlateNumbers(after: String, first: Int): PlateNumberConnection
+          me(pk: ID!): PlateNumber
+        }
+
+        type Subscription {
+          onCreatePlateNumber: PlateNumber
+            @aws_subscribe(mutations: ["createPlateNumber"])
+          onUpdatePlateNumber: PlateNumber
+            @aws_subscribe(mutations: ["updatePlateNumber"])
+          onDeletePlateNumber: PlateNumber
+            @aws_subscribe(mutations: ["deletePlateNumber"])
+          subscribeToNewMessage(pk: ID!): Message
+            @aws_subscribe(mutations: ["createMessage"])
+          subscribeToNewUserConversation(s_key: ID!): UserConversations
+            @aws_subscribe(mutations: ["createUserConversations"])
+          subscribeToDeleteUserConversation(s_key: ID!): UserConversations
+            @aws_subscribe(mutations: ["deleteUserConversations"])
+        }
+
+        input UpdatePlateNumberInput {
+          pk: ID!
+          phoneNumber: String
+          content_search: String
+        }
+
+        type UserConversations {
+          associated: [UserConversations]
+          conversation: Conversation
+          pk: ID!
+          user: PlateNumber
+          s_key: ID!
+          createdAt: AWSDateTime
+        }
+
+        type UserConversationsConnection {
+          nextToken: String
+          userConversations: [UserConversations]
+        }
+
+        schema {
+          query: Query
+          mutation: Mutation
+          subscription: Subscription
+        }
+
+  ConversationMessagesResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Conversation
+      FieldName: messages
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "Query",
+          "query" : {
+              "expression": "pk = :conversationId and begins_with(s_key, :message)",
+              "expressionValues" : {
+                  ":conversationId" : {
+                      "S" : "${ctx.source.pk}",
+                  },
+                  ":message" : {
+                      "S": "message_",
+                  },
+              },
+          },
+          "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+          "nextToken": #if(${ctx.args.after}) "${$ctx.args.after}" #else null #end,
+          "scanIndexForward": false,
+        }
+      ResponseMappingTemplate: |
+        {
+          "messages": $utils.toJson($ctx.result.items),
+          "nextToken": $utils.toJson($ctx.result.nextToken),
+        }
+
+  CreateConversationMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createConversation
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "PutItem",
+          "key": {
+              "pk":  $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+              "s_key": { "S": "conversation_config" },
+          },
+          "attributeValues" : {
+            "createdAt": {"S": "${ctx.args.input.createdAt}"},
+            "pk": {"S": "${ctx.args.input.pk}"},
+            "s_key": {"S": "conversation_config"},
+          },
+        }
+
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  CreateMessageMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createMessage
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "PutItem",
+          #set ($SK = "message_${ctx.args.input.createdAt}_${ctx.args.input.pk}")
+          "key" : {
+              "pk" : $util.dynamodb.toDynamoDBJson($ctx.args.input.conversationId),
+              "s_key": {"S": "${SK}"},
+          },
+          "attributeValues" : {
+            "authorId": {"S": "${ctx.args.input.sender}"},
+            "createdAt": { "S": "${ctx.args.input.createdAt}" },
+            "pk": {"S": "${ctx.args.input.conversationId}"},
+            "isSent": {"BOOL": true },
+            "s_key": {"S": "${SK}"},
+            "content_search": {"S": "${ctx.args.input.content}"},
+          },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  CreatePlateNumberMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createPlateNumber
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "PutItem",
+          "key": {
+            "pk": $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+            "s_key": {"S":"user_config"},
+          },
+          "attributeValues": {
+            "createdAt": {"S": "${ctx.args.input.lastModified}"},
+            "expoToken": {"S": "${ctx.args.input.expoToken}"},
+            "pk": {"S": "${ctx.args.input.pk}"},
+            "phoneNumber": {"S": "${ctx.args.input.phoneNumber}"},
+            "s_key": {"S":"user_config"},
+            "content_search": {"S": "${ctx.args.input.plateNumber}"},
+          },
+          "condition": {
+            "expression": "attribute_not_exists(#pk)",
+            "expressionNames": {
+              "#pk": "pk",
+            },
+          },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  CreateUserConversationsMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: createUserConversations
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "PutItem",
+          #set ($local_s_key = "member_${ctx.args.input.userId}")
+          "key": {
+              "pk" :  $util.dynamodb.toDynamoDBJson($ctx.args.input.conversationId),
+              "s_key" : {"S":"${local_s_key}"},
+          },
+          "attributeValues" : {
+            "content_search" : {"S" : "${ctx.args.input.userId}"},
+            "createdAt" : {"S": "${ctx.args.input.createdAt}"},
+            "pk" :  {"S" : "${ctx.args.input.conversationId}"},
+            "s_key" : {"S" : "${local_s_key}"},
+          },
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  DeleteConversationMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteConversation
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "DeleteItem",
+          "key" : {
+              "pk" : $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+              "s_key": {"S":"conversation_config"},
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  DeletePlateNumberMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deletePlateNumber
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "DeleteItem",
+          "key" : {
+              "pk" : $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+              "s_key": {"S":"user_config"},
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  DeleteUserConversationsMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: deleteUserConversations
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "DeleteItem",
+          "key" : {
+              "pk" : $util.dynamodb.toDynamoDBJson($ctx.args.input.conversationId),
+              "s_key": {"S":"member_${ctx.args.input.userId}"},
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  MeQueryResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: me
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "GetItem",
+          "key": {
+            "pk": $util.dynamodb.toDynamoDBJson($ctx.args.pk),
+            "s_key": {"S": "user_config"},
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  AssociatedUserConversationsResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: UserConversations
+      FieldName: associated
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "Query",
+          #set ($val = "member_")
+          "query" : {
+              "expression": "pk = :conversationId and begins_with(s_key, :s_key)",
+              "expressionValues" : {
+                  ":s_key" : {
+                      "S" : "${val}"
+                  },
+                  ":conversationId": {
+                      "S" : "${ctx.source.pk}"
+                  },
+              },
+          },
+          "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+          "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+          "scanIndexForward": true,
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result.items)
+
+  # AuthorMessagesResolver: #TODO: think we need another GSI with authorId as key
+  #   Type: "AWS::AppSync::Resolver"
+  #   DependsOn: Schema
+  #   Properties:
+  #     ApiId: !GetAtt GraphQLApi.ApiId
+  #     TypeName: Message
+  #     FieldName: author
+  #     DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+  #     RequestMappingTemplate: |
+  #
+  #     ResponseMappingTemplate: |
+  #       $util.toJson($ctx.result)
+
+  ConversationsPlateNumberResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: PlateNumber
+      FieldName: conversations
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "Query",
+          #set ($val = "member_${ctx.args.userId}")
+          "query" : {
+              "expression": "s_key = :s_key",
+              "expressionValues" : {
+                  ":s_key" : {
+                      "S" : "${val}"
+                  },
+              },
+          },
+          "index": "gsi-index",
+          "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+          "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+          "scanIndexForward": true,
+        }
+      ResponseMappingTemplate: |
+        {
+          "userConversations": $utils.toJson($ctx.result.items),
+          "nextToken": $utils.toJson($ctx.result.nextToken),
+        }
+
+  # MessagesPlateNumberResolver: #TODO: think we need another GSI with authorId as key
+  #   Type: "AWS::AppSync::Resolver"
+  #   DependsOn: Schema
+  #   Properties:
+  #     ApiId: !GetAtt GraphQLApi.ApiId
+  #     TypeName: PlateNumber
+  #     FieldName: messages
+  #     DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+  #     RequestMappingTemplate: |
+  #
+  #     ResponseMappingTemplate: |
+  #       {
+  #         "messages": $utils.toJson($ctx.result.items),
+  #         "nextToken": $utils.toJson($ctx.result.nextToken),
+  #       }
+
+  ConversationUserConversationsResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: UserConversations
+      FieldName: conversation
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "GetItem",
+          "key": {
+            "pk": $util.dynamodb.toDynamoDBJson($ctx.source.pk),
+            "s_key": {"S": "conversation_config"},
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  UserUserConversationsResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: UserConversations
+      FieldName: user
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "GetItem",
+          "key": {
+            "pk": $util.dynamodb.toDynamoDBJson($ctx.source.content_search),
+            "s_key": {"S": "user_config"},
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+  AllPlateNumbersQueryResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: allPlateNumbers
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "Query",
+          "query" : {
+              "expression": "s_key = :s_key",
+              "expressionValues" : {
+                  ":s_key" : {
+                      "S" : "user_config"
+                  },
+              },
+          },
+          "index": "gsi-index",
+          "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+          "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+          "scanIndexForward": true,
+        }
+      ResponseMappingTemplate: |
+        {
+          "items": $utils.toJson($ctx.result.items),
+          "nextToken": $utils.toJson($ctx.result.nextToken),
+        }
+
+  AllMessagesQueryResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: allMessages
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "Query",
+          "query" : {
+              "expression": "pk = :conversationId and begins_with(s_key, :message)",
+              "expressionValues" : {
+                  ":conversationId" : {
+                      "S" : "${ctx.args.conversationId}",
+                  },
+                  ":message" : {
+                      "S": "message_",
+                  },
+              },
+          },
+          "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+          "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+          "scanIndexForward": false,
+        }
+      ResponseMappingTemplate: |
+        {
+          "messages": $utils.toJson($ctx.result.items),
+          "nextToken": $utils.toJson($ctx.result.nextToken),
+        }
+
+  AllConversationsOfMeQueryResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Query
+      FieldName: allConversationsOfMe
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "Query",
+          #set ($val = "member_${ctx.args.userId}")
+          "query" : {
+              "expression": "s_key = :s_key",
+              "expressionValues" : {
+                  ":s_key" : {
+                      "S" : "${val}"
+                  },
+              },
+          },
+          "index": "gsi-index",
+          "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+          "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+          "scanIndexForward": true,
+        }
+      ResponseMappingTemplate: |
+        {
+          "userConversations": $utils.toJson($ctx.result.items),
+          "nextToken": $utils.toJson($ctx.result.nextToken),
+        }
+
+  UpdatePlateNumberMutationResolver:
+    Type: "AWS::AppSync::Resolver"
+    DependsOn: Schema
+    Properties:
+      ApiId: !GetAtt GraphQLApi.ApiId
+      TypeName: Mutation
+      FieldName: updatePlateNumber
+      DataSourceName: !GetAtt BuzzOutDBTableDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "UpdateItem",
+          "key": {
+            "pk": $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+            "s_key": {"S":"user_config"},
+          },
+
+          ## Set up some space to keep track of things we're updating **
+          #set( $expNames  = {} )
+          #set( $expValues = {} )
+          #set( $expSet = {} )
+          #set( $expAdd = {} )
+          #set( $expRemove = [] )
+
+          ## Iterate through each argument, skipping keys **
+          #foreach( $entry in $util.map.copyAndRemoveAllKeys($ctx.args.input, ["pk"]).entrySet() )
+            #if( $util.isNull($entry.value) )
+              ## If the argument is set to "null", then remove that attribute from the item in DynamoDB **
+
+              #set( $discard = ${expRemove.add("#${entry.key}")} )
+              $!{expNames.put("#${entry.key}", "${entry.key}")}
+            #else
+              ## Otherwise set (or update) the attribute on the item in DynamoDB **
+
+              $!{expSet.put("#${entry.key}", ":${entry.key}")}
+              $!{expNames.put("#${entry.key}", "${entry.key}")}
+              $!{expValues.put(":${entry.key}", $util.dynamodb.toDynamoDB($entry.value))}
+            #end
+          #end
+
+          ## Start building the update expression, starting with attributes we're going to SET **
+          #set( $expression = "" )
+          #if( !${expSet.isEmpty()} )
+            #set( $expression = "SET" )
+            #foreach( $entry in $expSet.entrySet() )
+              #set( $expression = "${expression} ${entry.key} = ${entry.value}" )
+              #if ( $foreach.hasNext )
+                #set( $expression = "${expression}," )
+              #end
+            #end
+          #end
+
+          ## Continue building the update expression, adding attributes we're going to ADD **
+          #if( !${expAdd.isEmpty()} )
+            #set( $expression = "${expression} ADD" )
+            #foreach( $entry in $expAdd.entrySet() )
+              #set( $expression = "${expression} ${entry.key} ${entry.value}" )
+              #if ( $foreach.hasNext )
+                #set( $expression = "${expression}," )
+              #end
+            #end
+          #end
+
+          ## Continue building the update expression, adding attributes we're going to REMOVE **
+          #if( !${expRemove.isEmpty()} )
+            #set( $expression = "${expression} REMOVE" )
+
+            #foreach( $entry in $expRemove )
+              #set( $expression = "${expression} ${entry}" )
+              #if ( $foreach.hasNext )
+                #set( $expression = "${expression}," )
+              #end
+            #end
+          #end
+
+          ## Finally, write the update expression into the document, along with any expressionNames and expressionValues **
+          "update": {
+            "expression": "${expression}",
+            #if( !${expNames.isEmpty()} )
+              "expressionNames": $utils.toJson($expNames),
+            #end
+            #if( !${expValues.isEmpty()} )
+              "expressionValues": $utils.toJson($expValues),
+            #end
+          },
+
+          "condition": {
+            "expression": "attribute_exists(#pk)",
+            "expressionNames": {
+              "#pk": "pk",
+            },
+          }
+        }
+      ResponseMappingTemplate: |
+        $util.toJson($ctx.result)
+
+Outputs:
+  GraphQLApiARN:
+    Description: The App ID for the GraphQLEndPoint
+    Value: !Ref GraphQLApi
+  GraphQLApiEndpoint:
+    Description: The URL for GraphQL endpoint
+    Value: !GetAtt GraphQLApi.GraphQLUrl

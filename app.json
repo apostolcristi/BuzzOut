@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "BuzzOut",
+    "slug": "buzzout",
+    "privacy": "public",
+    "sdkVersion": "35.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/logo.png",
+    "splash": {
+      "image": "./src/assets/images/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.trimwi.buzzout"
+    },
+    "ios": {
+      "supportsTablet": true
+    }
+  }
+}

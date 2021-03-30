@@ -1,0 +1,22 @@
+{
+  "version": "2017-02-28",
+  "operation": "PutItem",
+  "key": {
+    "pk": $util.dynamodb.toDynamoDBJson($ctx.args.input.pk),
+    "s_key": {"S":"user_config"},
+  },
+  "attributeValues": {
+    "createdAt": {"S": "${ctx.args.input.lastModified}"},
+    "expoToken": {"S": "${ctx.args.input.expoToken}"},
+    "pk": {"S": "${ctx.args.input.pk}"},
+    "phoneNumber": {"S": "${ctx.args.input.phoneNumber}"},
+    "s_key": {"S":"user_config"},
+    "content_search": {"S": "${ctx.args.input.plateNumber}"},
+  },
+  "condition": {
+    "expression": "attribute_not_exists(#pk)",
+    "expressionNames": {
+      "#pk": "pk",
+    },
+  },
+}

@@ -1,0 +1,144 @@
+type Conversation {
+  createdAt: AWSDateTime
+  pk: ID!
+  messages(after: String, first: Int): MessageConnection
+  content_search: String
+}
+
+input CreateConversationInput {
+  createdAt: AWSDateTime
+  pk: ID!
+  name: String
+}
+
+input CreateMessageInput {
+  content: String!
+  conversationId: ID!
+  createdAt: AWSDateTime!
+  pk: ID!
+  sender: String
+}
+
+input CreatePlateNumberInput {
+  expoToken: String
+  pk: ID!
+  lastModified: AWSDateTime
+  phoneNumber: String
+  plateNumber: String!
+}
+
+input CreateUserConversationsInput {
+  conversationId: ID!
+  userId: ID!
+  createdAt: AWSDateTime
+}
+
+input DeleteConversationInput {
+  pk: ID!
+}
+
+input DeletePlateNumberInput {
+  pk: ID!
+}
+
+input DeleteUserConversationsInput {
+  conversationId: ID!
+  userId: ID!
+}
+
+type Message {
+  author: PlateNumber
+  content_search: String!
+  pk: ID!
+  createdAt: AWSDateTime
+  s_key: ID!
+  isSent: Boolean
+  authorId: String
+}
+
+type MessageConnection {
+  messages: [Message]
+  nextToken: String
+}
+
+type Mutation {
+  createConversation(input: CreateConversationInput!): Conversation
+  createMessage(input: CreateMessageInput): Message
+  createPlateNumber(input: CreatePlateNumberInput!): PlateNumber
+  createUserConversations(
+    input: CreateUserConversationsInput!
+  ): UserConversations
+  deletePlateNumber(input: DeletePlateNumberInput!): PlateNumber
+  updatePlateNumber(input: UpdatePlateNumberInput!): PlateNumber
+  deleteConversation(input: DeleteConversationInput!): Conversation
+  deleteUserConversations(
+    input: DeleteUserConversationsInput!
+  ): UserConversations
+}
+
+type PlateNumber {
+  conversations(after: String, first: Int): UserConversationsConnection
+  messages(after: String, first: Int): MessageConnection
+  pk: ID!
+  content_search: String!
+  phoneNumber: String
+  createdAt: AWSDateTime
+  expoToken: String
+}
+
+type PlateNumberConnection {
+  items: [PlateNumber]
+  nextToken: String
+}
+
+type Query {
+  allConversationsOfMe(
+    after: String
+    userId: ID!
+    first: Int
+  ): UserConversationsConnection
+  allMessages(after: String, conversationId: ID!, first: Int): MessageConnection
+  allPlateNumbers(after: String, first: Int): PlateNumberConnection
+  me(pk: ID!): PlateNumber
+}
+
+type Subscription {
+  onCreatePlateNumber: PlateNumber
+    @aws_subscribe(mutations: ["createPlateNumber"])
+  onUpdatePlateNumber: PlateNumber
+    @aws_subscribe(mutations: ["updatePlateNumber"])
+  onDeletePlateNumber: PlateNumber
+    @aws_subscribe(mutations: ["deletePlateNumber"])
+  subscribeToNewMessage(pk: ID!): Message
+    @aws_subscribe(mutations: ["createMessage"])
+  subscribeToNewUserConversation(s_key: ID!): UserConversations
+    @aws_subscribe(mutations: ["createUserConversations"])
+  subscribeToDeleteUserConversation(s_key: ID!): UserConversations
+    @aws_subscribe(mutations: ["deleteUserConversations"])
+}
+
+input UpdatePlateNumberInput {
+  pk: ID!
+  phoneNumber: String
+  content_search: String
+}
+
+type UserConversations {
+  associated: [UserConversations]
+  conversation: Conversation
+  pk: ID!
+  user: PlateNumber
+  s_key: ID!
+  createdAt: AWSDateTime
+}
+
+type UserConversationsConnection {
+  nextToken: String
+  userConversations: [UserConversations]
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}

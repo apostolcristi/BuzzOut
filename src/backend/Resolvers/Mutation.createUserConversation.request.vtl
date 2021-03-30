@@ -1,0 +1,15 @@
+{
+  "version" : "2017-02-28",
+  "operation" : "PutItem",
+  #set ($local_s_key = "member_${ctx.args.input.userId}")
+  "key": {
+      "pk" :  $util.dynamodb.toDynamoDBJson($ctx.args.input.conversationId),
+      "s_key" : {"S":"${local_s_key}"},
+  },
+  "attributeValues" : {
+  	"content_search" : {"S" : "${ctx.args.input.userId}"},
+    "createdAt" : {"S": "${ctx.args.input.createdAt}"},
+    "pk" :  {"S" : "${ctx.args.input.conversationId}"},
+    "s_key" : {"S" : "${local_s_key}"},
+  },
+}

@@ -1,0 +1,19 @@
+{
+  "version" : "2017-02-28",
+  "operation" : "Query",
+  #set ($val = "member_")
+  "query" : {
+      "expression": "pk = :conversationId and begins_with(s_key, :s_key)",
+      "expressionValues" : {
+          ":s_key" : {
+              "S" : "${val}"
+          },
+          ":conversationId": {
+              "S" : "${ctx.source.pk}"
+          },
+      },
+  },
+  "limit": #if(${ctx.args.first}) ${ctx.args.first} #else 20 #end,
+  "nextToken": #if(${ctx.args.after}) "${ctx.args.after}" #else null #end,
+  "scanIndexForward": true,
+}
